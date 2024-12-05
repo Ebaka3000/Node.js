@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Chat</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #messages { border: 1px solid #ccc; height: 300px; overflow-y: auto; padding: 10px; margin-bottom: 10px; }
+        #users { margin-bottom: 10px; }
+        .message { margin: 5px 0; }
+        .system { color: gray; font-style: italic; }
+        .private { color: purple; font-style: italic; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Chat</h1>
+    <div id="messages"></div>
+    <div id="users">
+        <strong>Присутствуют:</strong> <span id="user-list"></span>
+    </div>
+    <div id="input">
+        <input type="text" id="recipient" placeholder="Кому (оставьте пустым для всех)">
+        <input type="text" id="message" placeholder="Введите сообщение">
+        <button id="send">Отправить</button>
+    </div>
+
+    <script>
+        const ws = new WebSocket('ws://localhost:8080');
+        const messagesDiv = document.getElementById('messages');
+        const userListSpan = document.getElementById('user-list');
+        const recipientInput = document.getElementById('recipient');
+        const messageInput = document.getElementById('message');
+        const sendButton = document.getElementById('send');
+
+        let username = null;
+        let color = null;
+
+        ws.onopen = () => {
+            username = prompt('Введите ваше имя:');
+            color = prompt('Введите ваш цвет (например, "red", "blue"):');
+            ws.send(JSON.stringify({ type: 'intro', username, color }));
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'system') {
+                addMessage(data.text, 'system');
+            } else if (data.type === 'message') {
+                addMessage(`${data.username}: ${data.text}`, null, data.color);
+            } else if (data.type === 'private') {
+                addMessage(`(Личное от ${data.username}): ${data.text}`, 'private', data.color);
+            }
+
+            updateUserList();
+        };
+
+        sendButton.onclick = () => {
+            const recipient = recipientInput.value.trim();
+            const text = messageInput.value.trim();
+            if (text) {
+                if (recipient) {
+                    ws.send(JSON.stringify({ type: 'private', to: recipient, text }));
+                } else {
+                    ws.send(JSON.stringify({ type: 'message', text }));
+                }
+                messageInput.value = '';
+            }
+        };
+
+        function addMessage(text, className = null, color = null) {
+            const message = document.createElement('div');
+            message.textContent = text;
+            if (className) message.className = className;
+            if (color) message.style.color = color;
+            messagesDiv.appendChild(message);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateUserList() {
+            const users = [...document.querySelectorAll('.message')]
+                .filter(msg => msg.textContent.includes(':'))
+                .map(msg => msg.textContent.split(':')[0].trim());
+            userListSpan.textContent = [...new Set(users)].join(', ');
+        }
+    </script>
+</body>
+</html>
